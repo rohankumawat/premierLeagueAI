@@ -1,0 +1,8 @@
+pandas
+requests
+beautifulsoup4
+jupyterlab
+flask
+lxml
+html5lib
+scikit-learn
