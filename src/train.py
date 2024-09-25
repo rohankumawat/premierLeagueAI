@@ -2,7 +2,8 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import precision_score, accuracy_score, roc_auc_score
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.exceptions import NotFittedError
 from joblib import dump
 import mlflow
 import mlflow.sklearn
@@ -26,7 +27,7 @@ def load_data(file_path):
         return None
 
 # General training function with MLflow logging
-def train_model(model, X_train, y_train, model_name):
+def train_model(model, X_train, y_train, model_name, param_grid):
     """
     Train a model with the provided training data and log with MLflow.
     Args:
@@ -42,21 +43,26 @@ def train_model(model, X_train, y_train, model_name):
         if mlflow.active_run() is not None:
             print(f"Ending existing active run with ID: {mlflow.active_run().info.run_id}")
             mlflow.end_run()
+        
+        # Hyperparameter tuning using GridSearchCV
+        grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5, scoring='roc_auc', n_jobs=-1, verbose=2)
+        grid_search.fit(X_train, y_train)
+        
+        # Best estimator after hyperparameter tuning
+        best_model = grid_search.best_estimator_
 
         # Start a new run
-        with mlflow.start_run(run_name=model_name):
+        with mlflow.start_run(run_name=f"{model_name}_tuning"):
             mlflow.log_param("model", model_name)
+            mlflow.log_params(grid_search.best_params_)
             
-            # Train the model
-            model.fit(X_train, y_train)
-            
-            # Log model to MLflow
-            mlflow.sklearn.log_model(model, model_name)
+            # Log the model
+            mlflow.sklearn.log_model(best_model, model_name)
 
         # Explicitly end the run after training
         mlflow.end_run()
 
-        return model
+        return best_model
     
     except Exception as e:
         print(f"Error in training {model_name}: {e}")
@@ -82,11 +88,6 @@ def evaluate_model(model, X_test, y_test, model_name):
     precision = precision_score(y_test, preds)
     accuracy = accuracy_score(y_test, preds)
     roc_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
-
-    # Log metrics with MLflow
-    mlflow.log_metric("precision", precision)
-    mlflow.log_metric("accuracy", accuracy)
-    mlflow.log_metric("roc_auc", roc_auc)
 
     return {
         "precision": precision,
@@ -130,18 +131,32 @@ if __name__ == "__main__":
     y = data[target]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Initialize models
-    models = {
-        "RandomForest": RandomForestClassifier(n_estimators=100, random_state=42),
-        "LogisticRegression": LogisticRegression(max_iter=1000, random_state=42)
+    # Hyperparameter grids for Random Forest and Logistic Regression
+    param_grid_rf = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [None, 10, 20, 30],
+    'min_samples_split': [2, 5, 10],
+    'max_features': ['sqrt', 'log2', None]  # Remove 'auto' and replace with valid options
     }
 
-    # Train and evaluate each model with MLflow
-    for model_name, model in models.items():
+    param_grid_lr = {
+        'C': [0.01, 0.1, 1.0, 10],
+        'penalty': ['l1', 'l2'],
+        'solver': ['liblinear', 'saga']
+    }
+
+    # Initialize models and hyperparameter grids
+    models = {
+        "RandomForest": (RandomForestClassifier(random_state=42), param_grid_rf),
+        "LogisticRegression": (LogisticRegression(max_iter=1000, random_state=42), param_grid_lr)
+    }
+
+    # Train and evaluate each model with hyperparameter tuning and MLflow
+    for model_name, (model, param_grid) in models.items():
         print(f"Training {model_name}...")
 
         # Train the model and log it to MLflow
-        trained_model = train_model(model, X_train, y_train, model_name)
+        trained_model = train_model(model, X_train, y_train, model_name, param_grid)
 
         if trained_model is not None:
             # Evaluate the model only if it was trained successfully
@@ -150,7 +165,7 @@ if __name__ == "__main__":
             print(f"Precision: {metrics['precision']}")
             print(f"Accuracy: {metrics['accuracy']}")
             print(f"ROC AUC: {metrics['roc_auc']}\n")
-            
+
             # Save the trained model
             save_model(trained_model, model_name)
         else:
