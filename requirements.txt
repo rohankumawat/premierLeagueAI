@@ -11,3 +11,4 @@ seaborn
 mplsoccer
 plotly
 mlflow
+dvc

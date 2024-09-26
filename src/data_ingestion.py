@@ -34,7 +34,10 @@ def preprocess_data(matches):
     matches["date"] = pd.to_datetime(matches["date"])
 
     # Create target column: 1 if team won, 0 otherwise
-    matches["target"] = (matches["result"] == "W").astype("int")
+    # matches["target"] = (matches["result"] == "W").astype("int")
+
+    # Create a multi-class target column: 0 = Loss, 1 = Draw, 2 = Win
+    matches["target"] = matches["result"].apply(lambda x: 2 if x == "W" else (1 if x == "D" else 0))
 
     # Convert categorical columns to numerical codes
     matches["venue_code"] = matches["venue"].astype("category").cat.codes

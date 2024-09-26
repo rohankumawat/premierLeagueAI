@@ -1,7 +1,7 @@
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import precision_score, accuracy_score, roc_auc_score
+from sklearn.metrics import precision_score, accuracy_score, roc_auc_score, classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.exceptions import NotFittedError
 from joblib import dump
@@ -85,13 +85,24 @@ def evaluate_model(model, X_test, y_test, model_name):
         dict: Dictionary containing evaluation metrics.
     """
     preds = model.predict(X_test)
-    precision = precision_score(y_test, preds)
-    accuracy = accuracy_score(y_test, preds)
-    roc_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+    # precision = precision_score(y_test, preds)
+    # accuracy = accuracy_score(y_test, preds)
+    # roc_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
 
+    # Classification report for precision, recall, F1-score, and support for each class
+    report = classification_report(y_test, preds, target_names=["Loss", "Draw", "Win"], zero_division=0, output_dict=True)
+    precision = report["macro avg"]["precision"]
+    recall = report["macro avg"]["recall"]
+    f1_score = report["macro avg"]["f1-score"]
+
+    # ROC AUC for multi-class classification (One-vs-Rest approach)
+    roc_auc = roc_auc_score(y_test, model.predict_proba(X_test), multi_class='ovr')
+
+    # Return all the relevant metrics
     return {
         "precision": precision,
-        "accuracy": accuracy,
+        "recall": recall,
+        "f1_score": f1_score,
         "roc_auc": roc_auc
     }
 
@@ -163,7 +174,8 @@ if __name__ == "__main__":
             metrics = evaluate_model(trained_model, X_test, y_test, model_name)
             print(f"{model_name} Evaluation:")
             print(f"Precision: {metrics['precision']}")
-            print(f"Accuracy: {metrics['accuracy']}")
+            print(f"Recall: {metrics['recall']}")
+            print(f"F1 Score: {metrics['f1_score']}")
             print(f"ROC AUC: {metrics['roc_auc']}\n")
 
             # Save the trained model

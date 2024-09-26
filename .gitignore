@@ -162,7 +162,7 @@ cython_debug/
 #.idea/
 
 # Data files (raw, preprocessed, etc.)
-data/preprocessed/
+# data/preprocessed/
 data/output/
 
 # Model artifacts
